@@ -1,0 +1,6 @@
+function FindProxyForURL(url, host) {
+{{- range .Sites }}
+  if (dnsDomainIs(host, "{{ . }}")) { return "SOCKS5 {{ .DDNS }}"; }
+{{- end }}
+  return "DIRECT";
+}
