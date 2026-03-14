@@ -2,6 +2,8 @@
 """Interactive setup script for pi-gateway."""
 
 import secrets
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -26,11 +28,40 @@ def prompt_password(question: str) -> str:
         print("  Password must be at least 8 characters.")
 
 
+def check_dependencies() -> bool:
+    ok = True
+    for cmd in ["docker"]:
+        if not shutil.which(cmd):
+            print(f"  ✗ {cmd} not found — please install it first")
+            ok = False
+        else:
+            print(f"  ✓ {cmd} found")
+
+    try:
+        subprocess.run(
+            ["docker", "compose", "version"],
+            capture_output=True,
+            check=True,
+        )
+        print("  ✓ docker compose found")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("  ✗ docker compose not found — please install Docker Compose v2")
+        ok = False
+
+    return ok
+
+
 def main():
     print()
     print("=" * 50)
     print("  Pi Gateway — Setup")
     print("=" * 50)
+    print()
+
+    print("Checking dependencies...")
+    if not check_dependencies():
+        print("\nPlease install missing dependencies and run setup again.")
+        sys.exit(1)
     print()
 
     env_path = Path(".env")
@@ -62,26 +93,17 @@ ADMIN_PASSWORD={admin_password}
 
 API_SECRET_KEY={api_secret_key}
 
-# Squid container name (default: pi-gateway-squid-1)
-SQUID_CONTAINER=pi-gateway-squid-1
+# Squid container name
+SQUID_CONTAINER=squid
 """
 
     env_path.write_text(env_content)
-    print(f"  ✓ .env created")
-
-    data_dir = Path("data")
-    data_dir.mkdir(exist_ok=True)
-
-    for fname in ["passwd", "db.sqlite3"]:
-        fpath = data_dir / fname
-        if not fpath.exists():
-            fpath.touch()
-            print(f"  ✓ data/{fname} created")
+    print("  ✓ .env created")
 
     domains_txt = Path("squid/domains.txt")
     if not domains_txt.exists():
         domains_txt.touch()
-        print(f"  ✓ squid/domains.txt created")
+        print("  ✓ squid/domains.txt created")
 
     print()
     print("=" * 50)
@@ -91,17 +113,24 @@ SQUID_CONTAINER=pi-gateway-squid-1
     print("Next steps:")
     print()
     print("  1. Build and start:")
-    print("       docker compose up --build")
-    print()
-    print(f"  2. Open http://{domain}")
-    print()
-    print(f"  3. Login with: {admin_username} / <your password>")
+    print("       docker compose up --build -d")
     print()
 
     if domain == "localhost":
-        print("  Note: Running on localhost — HTTPS is disabled.")
-        print("        For production, set a real domain in .env")
+        print(f"  2. Open http://localhost")
         print()
+        print("  Note: Running on localhost — HTTPS is disabled.")
+        print("        For production set a real domain and re-run setup.")
+    else:
+        print(f"  2. Open https://{domain}")
+        print("       (SSL certificate will be issued automatically)")
+
+    print()
+    print(f"  3. Login with: {admin_username} / <your password>")
+    print()
+    print("  To stop:    docker compose down")
+    print("  To update:  git pull && docker compose up --build -d")
+    print()
 
 
 if __name__ == "__main__":
