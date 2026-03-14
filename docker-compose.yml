@@ -2,6 +2,10 @@ name: pi-gateway
 
 services:
   caddy:
+    container_name: caddy
+    depends_on:
+      - api
+      - ui
     build: ./caddy
     restart: always
     ports:
@@ -16,48 +20,51 @@ services:
       - caddy_config:/config
     networks:
       - internal
-    depends_on:
-      - api
-      - ui
 
   squid:
+    container_name: squid
     build: ./squid
     restart: always
     ports:
       - "3128:3128"
     volumes:
-      - ./squid/squid.conf:/etc/squid/squid.conf:ro
-      - ./squid/domains.txt:/etc/squid/domains.txt
-      - ./data/passwd:/etc/squid/passwd:ro
+      - shared_data:/shared
       - squid_logs:/var/log/squid
+    entrypoint: >
+      sh -c "rm -f /run/squid.pid &&
+             chown -R proxy:proxy /var/log/squid &&
+             touch /shared/domains.txt /shared/passwd &&
+             ln -sf /shared/domains.txt /etc/squid/domains.txt &&
+             ln -sf /shared/passwd /etc/squid/passwd &&
+             squid -N"
     networks:
       - internal
 
   api:
-    user: root
+    container_name: api
+    depends_on:
+      - squid
     build: ./api
     restart: always
+    user: root
     environment:
       - API_SECRET_KEY=${API_SECRET_KEY}
       - DOMAIN=${DOMAIN}
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - SQUID_CONTAINER=pi-gateway-squid-1
-      - DOMAINS_FILE=/data/domains.txt
-      - HTPASSWD_FILE=/data/passwd
-      - DB_URL=sqlite+aiosqlite:////data/db.sqlite3
+      - DOMAINS_FILE=/shared/domains.txt
+      - HTPASSWD_FILE=/shared/passwd
+      - DB_URL=sqlite+aiosqlite:////shared/db.sqlite3
     volumes:
-      - ./squid/domains.txt:/data/domains.txt
-      - ./data/passwd:/data/passwd
-      - ./data/db.sqlite3:/data/db.sqlite3
+      - shared_data:/shared
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - squid_logs:/var/log/squid:ro
     networks:
       - internal
-    depends_on:
-      - squid
 
   ui:
+    container_name: ui
     build: ./ui
     restart: always
     networks:
@@ -71,3 +78,4 @@ volumes:
   caddy_data:
   caddy_config:
   squid_logs:
+  shared_data:

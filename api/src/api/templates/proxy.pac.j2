@@ -1,0 +1,9 @@
+function FindProxyForURL(url, host) {
+    var domains = [{{ domains | map('tojson') | join(', ') }}];
+    for (var i = 0; i < domains.length; i++) {
+        if (dnsDomainIs(host, domains[i]) || shExpMatch(host, "*." + domains[i])) {
+            return "PROXY {{ domain }}:3128";
+        }
+    }
+    return "DIRECT";
+}

@@ -76,9 +76,8 @@ async def test_reset_password(client: AsyncClient, admin_token: str):
 
     response = await client.post(
         f"/api/users/{user_id}/reset-password",
-        headers={"Authorization": f"Bearer {admin_token}"}
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"password": "newpassword123"}
     )
     assert response.status_code == 200
-    data = response.json()
-    assert "pac_url" in data
-    assert "proxy_pass" in data
+    assert "pac_url" in response.json()

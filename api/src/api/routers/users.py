@@ -1,8 +1,7 @@
 import secrets
-from time import process_time_ns
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -24,23 +23,62 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole = UserRole.user
 
+    @field_validator("username")
+    @classmethod
+    def username_valid(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        if len(v) > 64:
+            raise ValueError("Username must be at most 64 characters")
+        if not v.isalnum() and not all(c.isalnum() or c in "-_" for c in v):
+            raise ValueError("Username may only contain letters, digits, hyphens and underscores")
+        return v
 
-class UserResponse(BaseModel):
-    id: int
-    username: str
-    role: UserRole
-    created_at: str
-    pac_url: str | None = None
-    proxy_user: str | None = None
-    proxy_pass: str | None = None
+    @field_validator("password")
+    @classmethod
+    def password_valid(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
 
 
-async def rebuild_and_reload(db: AsyncSession) -> None:
+class ResetPasswordRequest(BaseModel):
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_valid(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+async def _rebuild_htpasswd_from_db(db: AsyncSession) -> None:
     result = await db.execute(select(ProxyUser))
-    proxy_users = result.scalars().all()
-    users_data = [(p.proxy_user, p.proxy_pass) for p in proxy_users]
+    users_data = [(p.proxy_user, p.proxy_pass) for p in result.scalars().all()]
     rebuild_htpasswd(users_data)
     reload_squid()
+
+
+# ВАЖНО: /me/pac должен быть ДО /{user_id}
+@router.get("/me/pac")
+async def get_my_pac(
+    user: UIUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ProxyUser).where(ProxyUser.ui_user_id == user.id)
+    )
+    proxy = result.scalar_one_or_none()
+    if not proxy:
+        raise HTTPException(status_code=404, detail="No proxy user found")
+
+    return {
+        "pac_url": f"https://{settings.domain}/proxy.pac?token={proxy.pac_token}",
+        "proxy_user": proxy.proxy_user,
+        "proxy_pass": proxy.proxy_pass,
+    }
 
 
 @router.get("")
@@ -75,7 +113,6 @@ async def create_user(
     admin: UIUser = Depends(require_admin),
 ):
     existing = await db.execute(select(UIUser).where(UIUser.username == body.username))
-
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already exists")
 
@@ -90,13 +127,12 @@ async def create_user(
     proxy_pass = secrets.token_hex(16)
     pac_token = secrets.token_hex(32)
 
-    proxy_user = ProxyUser(
+    db.add(ProxyUser(
         ui_user_id=user.id,
         pac_token=pac_token,
         proxy_user=body.username,
         proxy_pass=proxy_pass,
-    )
-    db.add(proxy_user)
+    ))
 
     try:
         await db.commit()
@@ -104,9 +140,7 @@ async def create_user(
         await db.rollback()
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    await db.refresh(user)
-    await db.refresh(proxy_user)
-    await rebuild_and_reload(db)
+    await _rebuild_htpasswd_from_db(db)
 
     return {
         "id": user.id,
@@ -144,6 +178,7 @@ async def delete_user(
 @router.post("/{user_id}/reset-password")
 async def reset_password(
     user_id: int,
+    body: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
     admin: UIUser = Depends(require_admin),
 ):
@@ -151,6 +186,10 @@ async def reset_password(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Обновляем UI пароль
+    user.password_hash = hash_password(body.password)
+
+    # Обновляем proxy credentials
     new_proxy_pass = secrets.token_hex(16)
     new_pac_token = secrets.token_hex(32)
 
@@ -159,29 +198,10 @@ async def reset_password(
         user.proxy_user.pac_token = new_pac_token
 
     await db.commit()
-    await rebuild_and_reload(db)
+    await _rebuild_htpasswd_from_db(db)
 
     return {
         "pac_url": f"https://{settings.domain}/proxy.pac?token={new_pac_token}",
         "proxy_user": user.username,
         "proxy_pass": new_proxy_pass,
-    }
-
-
-@router.get("/me/pac")
-async def get_my_pac(
-    user: UIUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(ProxyUser).where(ProxyUser.ui_user_id == user.id)
-    )
-    proxy = result.scalar_one_or_none()
-    if not proxy:
-        raise HTTPException(status_code=404, detail="No proxy user found")
-
-    return {
-        "pac_url": f"https://{settings.domain}/proxy.pac?token={proxy.pac_token}",
-        "proxy_user": proxy.proxy_user,
-        "proxy_pass": proxy.proxy_pass,
     }
