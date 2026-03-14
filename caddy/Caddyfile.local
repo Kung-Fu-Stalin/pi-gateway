@@ -1,8 +1,9 @@
 {
     email {$ACME_EMAIL}
+    local_certs
 }
 
-{$DOMAIN} {
+:80 {
     handle /api/* {
         reverse_proxy api:8000
     }

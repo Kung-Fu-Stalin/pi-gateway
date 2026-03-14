@@ -1,9 +1,13 @@
 {
     email {$ACME_EMAIL}
-    local_certs
 }
 
-:80 {
+{$DOMAIN} {
+
+    log {
+        level ERROR
+    }
+
     handle /api/* {
         reverse_proxy api:8000
     }
@@ -24,3 +28,4 @@
         reverse_proxy ui:80
     }
 }
+
