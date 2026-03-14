@@ -1,0 +1,73 @@
+name: pi-gateway
+
+services:
+  caddy:
+    build: ./caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+    depends_on:
+      - api
+      - ui
+
+  squid:
+    build: ./squid
+    restart: always
+    ports:
+      - "3128:3128"
+    volumes:
+      - ./squid/squid.conf:/etc/squid/squid.conf:ro
+      - ./squid/domains.txt:/etc/squid/domains.txt
+      - ./data/passwd:/etc/squid/passwd:ro
+      - squid_logs:/var/log/squid
+    networks:
+      - internal
+
+  api:
+    user: root
+    build: ./api
+    restart: always
+    environment:
+      - API_SECRET_KEY=${API_SECRET_KEY}
+      - DOMAIN=${DOMAIN}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - SQUID_CONTAINER=pi-gateway-squid-1
+      - DOMAINS_FILE=/data/domains.txt
+      - HTPASSWD_FILE=/data/passwd
+      - DB_URL=sqlite+aiosqlite:////data/db.sqlite3
+    volumes:
+      - ./squid/domains.txt:/data/domains.txt
+      - ./data/passwd:/data/passwd
+      - ./data/db.sqlite3:/data/db.sqlite3
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - squid_logs:/var/log/squid:ro
+    networks:
+      - internal
+    depends_on:
+      - squid
+
+  ui:
+    build: ./ui
+    restart: always
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  squid_logs:

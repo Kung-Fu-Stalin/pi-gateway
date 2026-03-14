@@ -1,0 +1,67 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data
+data/
+*.sqlite3
+*.db
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+*.pyo
+.python-version
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+.next/
+.nuxt/
+npm-debug.log
+yarn-error.log
+*.tgz
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.projectile
+.history
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Lock files (for development)
+# Uncomment if you want to ignore lock files
+# package-lock.json
+# yarn.lock
+# uv.lock
+
+# Squid logs
+/squid/logs/
+
+# Caddy data and config
+/caddy/data/
+/caddy/config/
