@@ -3,8 +3,7 @@ FROM python:3.12-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 RUN groupadd -r app && useradd -r -g app -u 1000 app
-
-RUN mkdir -p /shared && chmod 777 /shared
+RUN groupadd -f proxy && usermod -aG proxy app
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./

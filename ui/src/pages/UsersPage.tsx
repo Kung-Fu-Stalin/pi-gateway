@@ -2,12 +2,26 @@ import { useState } from 'react'
 import { useAuthStore } from '../store/auth'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getUsers, createUser, deleteUser, resetPassword, type User } from '../api/users'
+import axios from 'axios'
+
+function getApiError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail
+    if (Array.isArray(detail)) {
+      // Pydantic validation errors
+      return detail.map((e: { msg: string }) => e.msg.replace('Value error, ', '')).join(', ')
+    }
+    if (typeof detail === 'string') return detail
+  }
+  return 'Something went wrong'
+}
 
 export default function UsersPage() {
   const { user: currentUser } = useAuthStore()
   const qc = useQueryClient()
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' })
   const [resetPwd, setResetPwd] = useState<Record<number, string>>({})
+  const [resetError, setResetError] = useState<Record<number, string>>({})
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -28,7 +42,13 @@ export default function UsersPage() {
 
   const mutReset = useMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) => resetPassword(id, password),
-    onSuccess: (_, { id }) => setResetPwd(r => ({ ...r, [id]: '' })),
+    onSuccess: (_, { id }) => {
+      setResetPwd(r => ({ ...r, [id]: '' }))
+      setResetError(e => ({ ...e, [id]: '' }))
+    },
+    onError: (error, { id }) => {
+      setResetError(e => ({ ...e, [id]: getApiError(error) }))
+    },
   })
 
   if (isLoading) return <div className="text-gray-500">Loading...</div>
@@ -49,7 +69,7 @@ export default function UsersPage() {
           />
           <input
             className="flex-1 bg-gray-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Password"
+            placeholder="Password (min 8 chars)"
             type="password"
             value={newUser.password}
             onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))}
@@ -70,7 +90,7 @@ export default function UsersPage() {
           </button>
         </div>
         {mutCreate.isError && (
-          <p className="text-red-400 text-xs">Username already exists</p>
+          <p className="text-red-400 text-xs">{getApiError(mutCreate.error)}</p>
         )}
       </div>
 
@@ -88,30 +108,35 @@ export default function UsersPage() {
                 </span>
               </div>
               {currentUser?.id !== user.id && (
-                  <button
-                    onClick={() => mutDelete.mutate(user.id)}
-                    className="text-xs text-gray-600 hover:text-red-400 transition-colors"
-                  >
-                    Delete
-                  </button>
-                )}
+                <button
+                  onClick={() => mutDelete.mutate(user.id)}
+                  className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                >
+                  Delete
+                </button>
+              )}
             </div>
 
             {/* Reset password */}
-            <div className="flex gap-2">
-              <input
-                className="flex-1 bg-gray-800 text-white rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="New password..."
-                type="password"
-                value={resetPwd[user.id] ?? ''}
-                onChange={e => setResetPwd(r => ({ ...r, [user.id]: e.target.value }))}
-              />
-              <button
-                onClick={() => resetPwd[user.id] && mutReset.mutate({ id: user.id, password: resetPwd[user.id] })}
-                className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors"
-              >
-                Reset pwd
-              </button>
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 bg-gray-800 text-white rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="New password (min 8 chars)..."
+                  type="password"
+                  value={resetPwd[user.id] ?? ''}
+                  onChange={e => setResetPwd(r => ({ ...r, [user.id]: e.target.value }))}
+                />
+                <button
+                  onClick={() => resetPwd[user.id] && mutReset.mutate({ id: user.id, password: resetPwd[user.id] })}
+                  className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm transition-colors"
+                >
+                  Reset pwd
+                </button>
+              </div>
+              {resetError[user.id] && (
+                <p className="text-red-400 text-xs">{resetError[user.id]}</p>
+              )}
             </div>
           </div>
         ))}

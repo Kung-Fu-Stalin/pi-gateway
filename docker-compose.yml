@@ -35,7 +35,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80/healthz"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:2019/config/ || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -53,6 +53,7 @@ services:
     entrypoint: >
       sh -c "rm -f /run/squid.pid &&
              chown -R proxy:proxy /var/log/squid &&
+             chmod -R 750 /var/log/squid &&
              mkdir -p /shared &&
              touch /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
              chmod 666 /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
@@ -62,7 +63,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "squidclient", "-h", "localhost", "mgr:info"]
+      test: [ "CMD-SHELL", "squid -k check || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -106,7 +107,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:80 || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 3
