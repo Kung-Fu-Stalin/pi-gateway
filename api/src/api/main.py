@@ -1,24 +1,24 @@
+import logging
 import secrets
 from contextlib import asynccontextmanager
 
 import bcrypt
-from fastapi import HTTPException
-from fastapi.responses import Response
-from sqlalchemy.orm import selectinload
-from fastapi import FastAPI, Depends, Query
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from api.auth import get_current_user
 from api.config import settings
-from api.database import engine, async_session, Base, get_db
+from api.services.pac import render_pac
+from api.database import async_session, get_db
 from api.models import UIUser, ProxyUser, Domain, DomainStatus, UserRole
 from api.routers import auth, domains, users, logs
 from api.services.squid import write_domains
 
+logger = logging.getLogger(__name__)
 
-async def create_admin_if_not_exists():
+
+async def create_admin_if_not_exists() -> None:
     async with async_session() as db:
         result = await db.execute(
             select(UIUser).where(UIUser.username == settings.admin_username)
@@ -38,26 +38,28 @@ async def create_admin_if_not_exists():
         db.add(admin)
         await db.flush()
 
-        proxy_pass = secrets.token_hex(16)
-        pac_token = secrets.token_hex(32)
-
         proxy_user = ProxyUser(
             ui_user_id=admin.id,
-            pac_token=pac_token,
+            pac_token=secrets.token_hex(32),
             proxy_user=settings.admin_username,
-            proxy_pass=proxy_pass,
+            proxy_pass=secrets.token_hex(16),
         )
         db.add(proxy_user)
         await db.commit()
+        logger.info("Admin user created: %s", settings.admin_username)
 
 
-async def sync_domains_file():
-    async with async_session() as db:
-        result = await db.execute(
-            select(Domain).where(Domain.status == DomainStatus.approved)
-        )
-        domain_list = [d.domain for d in result.scalars().all()]
-        write_domains(domain_list)
+async def sync_domains_file() -> None:
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(Domain).where(Domain.status == DomainStatus.approved)
+            )
+            domain_list = [d.domain for d in result.scalars().all()]
+            write_domains(domain_list)
+            logger.info("Synced %d domains to file", len(domain_list))
+    except Exception as e:
+        logger.warning("Failed to sync domains file: %s", e)
 
 
 @asynccontextmanager
@@ -67,11 +69,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Pi Gateway API",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[f"https://{settings.domain}", f"http://{settings.domain}", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,14 +91,13 @@ app.include_router(users.router)
 app.include_router(logs.router)
 
 
-@app.get("/healthz")
+@app.get("/healthz", tags=["system"])
 async def healthz():
     return {"ok": True}
 
 
-@app.get("/proxy.pac")
+@app.get("/proxy.pac", tags=["proxy"])
 async def proxy_pac(token: str = Query(...), db=Depends(get_db)):
-
     result = await db.execute(
         select(ProxyUser).where(ProxyUser.pac_token == token)
     )
@@ -103,16 +110,5 @@ async def proxy_pac(token: str = Query(...), db=Depends(get_db)):
     )
     domain_list = [d.domain for d in result.scalars().all()]
 
-    rules = ", ".join(f'"{d}"' for d in domain_list)
-
-    pac = f"""function FindProxyForURL(url, host) {{
-    var domains = [{rules}];
-    for (var i = 0; i < domains.length; i++) {{
-        if (dnsDomainIs(host, domains[i]) || shExpMatch(host, "*." + domains[i])) {{
-            return "PROXY {settings.domain}:3128";
-        }}
-    }}
-    return "DIRECT";
-}}
-"""
-    return Response(content=pac, media_type="application/x-ns-proxy-autoconfig")
+    content = render_pac(domain_list, settings.domain)
+    return Response(content=content, media_type="application/x-ns-proxy-autoconfig")

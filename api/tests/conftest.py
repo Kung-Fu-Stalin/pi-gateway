@@ -1,7 +1,6 @@
 import secrets
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import bcrypt
 import pytest
@@ -13,6 +12,7 @@ from api.config import settings
 from api.database import Base, get_db
 from api.main import app
 from api.models import UIUser, ProxyUser, UserRole
+from unittest.mock import patch
 
 
 @pytest_asyncio.fixture
@@ -75,7 +75,9 @@ async def client(db_session, tmp_files):
     app.dependency_overrides[get_db] = override_get_db
 
     with patch.object(settings, "domains_file", str(tmp_files["domains"])), \
-         patch.object(settings, "htpasswd_file", str(tmp_files["passwd"])):
+         patch.object(settings, "htpasswd_file", str(tmp_files["passwd"])), \
+         patch("api.routers.domains.reload_squid"), \
+         patch("api.routers.users.reload_squid"):
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test"

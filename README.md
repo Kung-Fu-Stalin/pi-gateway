@@ -34,10 +34,10 @@ Pi-Gateway is a containerized application that implements a full-featured proxy 
        │
        ├──────────────┬──────────────┐
        ▼              ▼              ▼
-    ┌────┐       ┌────────┐    ┌────────┐
-    │Squid      │ FastAPI │   │ React  │
-    │(Proxy)    │ (API)   │   │ (UI)   │
-    └────┘       └────────┘    └────────┘
+    ┌────┐       ┌─────────┐    ┌────────┐
+    │Squid       │ FastAPI │    │  React │
+    │(Proxy)     │ (API)   │    │  (UI)  │
+    └────┘       └─────────┘    └────────┘
 ```
 
 ## Prerequisites
@@ -51,7 +51,7 @@ Pi-Gateway is a containerized application that implements a full-featured proxy 
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Kung-Fu-Stalin/pi-gateway.git
 cd pi-gateway
 ```
 
@@ -74,7 +74,7 @@ ADMIN_PASSWORD=admin-password-here
 
 ```bash
 cd api
-python -m alembic upgrade head
+uv run alembic upgrade head
 ```
 
 This runs database migrations to set up the schema with necessary tables.

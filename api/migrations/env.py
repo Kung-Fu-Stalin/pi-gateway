@@ -33,8 +33,21 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "foreign_key_constraint":
+        return False
+    return True
+
+
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+        compare_type=False,
+        compare_server_default=False,
+        render_as_batch=True,  # включает batch mode для SQLite
+    )
     with context.begin_transaction():
         context.run_migrations()
 

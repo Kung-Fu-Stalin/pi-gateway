@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useAuthStore } from '../store/auth'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getUsers, createUser, deleteUser, resetPassword, type User } from '../api/users'
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuthStore()
   const qc = useQueryClient()
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' })
   const [resetPwd, setResetPwd] = useState<Record<number, string>>({})
@@ -85,12 +87,14 @@ export default function UsersPage() {
                   {user.role}
                 </span>
               </div>
-              <button
-                onClick={() => mutDelete.mutate(user.id)}
-                className="text-xs text-gray-600 hover:text-red-400 transition-colors"
-              >
-                Delete
-              </button>
+              {currentUser?.id !== user.id && (
+                  <button
+                    onClick={() => mutDelete.mutate(user.id)}
+                    className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
             </div>
 
             {/* Reset password */}

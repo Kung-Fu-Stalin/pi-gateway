@@ -37,7 +37,10 @@ class UIUser(Base):
         back_populates="ui_user",
         cascade="all, delete-orphan",
     )
-    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     domains_added: Mapped[list["Domain"]] = relationship(
         back_populates="created_by_user",
         foreign_keys="[Domain.created_by]",
@@ -49,11 +52,8 @@ class RefreshToken(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("ui_users.id", ondelete="CASCADE"))
-    token_hash: Mapped[str] = mapped_column(String(256), unique=True)
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-    )
+    token_hash: Mapped[str] = mapped_column(String(256), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -66,8 +66,10 @@ class ProxyUser(Base):
     __tablename__ = "proxy_users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    ui_user_id: Mapped[int] = mapped_column(ForeignKey("ui_users.id", ondelete="CASCADE"), unique=True)
-    pac_token: Mapped[str] = mapped_column(String(128), unique=True)
+    ui_user_id: Mapped[int] = mapped_column(
+        ForeignKey("ui_users.id", ondelete="CASCADE"), unique=True
+    )
+    pac_token: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     proxy_user: Mapped[str] = mapped_column(String(64), unique=True)
     proxy_pass: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
@@ -82,33 +84,46 @@ class DomainGroup(Base):
     __tablename__ = "domain_groups"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(253), unique=True)
+    name: Mapped[str] = mapped_column(String(253), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(timezone.utc),
     )
 
-    domains: Mapped[list["Domain"]] = relationship(back_populates="group", cascade="all, delete-orphan")
+    domains: Mapped[list["Domain"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
 
 
 class Domain(Base):
     __tablename__ = "domains"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("domain_groups.id", ondelete="CASCADE"))
-    domain: Mapped[str] = mapped_column(String(253), unique=True)
-    status: Mapped[DomainStatus] = mapped_column(SAEnum(DomainStatus), default=DomainStatus.pending)
-    created_by: Mapped[int] = mapped_column(ForeignKey("ui_users.id"))
-    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("ui_users.id"), nullable=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("domain_groups.id", ondelete="CASCADE")
+    )
+    domain: Mapped[str] = mapped_column(String(253), unique=True, index=True)
+    status: Mapped[DomainStatus] = mapped_column(
+        SAEnum(DomainStatus), default=DomainStatus.pending
+    )
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("ui_users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_by: Mapped[int | None] = mapped_column(
+        ForeignKey("ui_users.id", ondelete="SET NULL"), nullable=True
+    )
     reject_reason: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(timezone.utc),
     )
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     group: Mapped["DomainGroup"] = relationship(back_populates="domains")
-    created_by_user: Mapped["UIUser"] = relationship(
+    created_by_user: Mapped["UIUser | None"] = relationship(
         foreign_keys=[created_by],
         back_populates="domains_added",
     )

@@ -67,7 +67,7 @@ async def test_create_user_writes_passwd(client: AsyncClient, admin_token: str, 
         response = await client.post(
             "/api/users",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"username": "newuser", "password": "pass123", "role": "user"}
+            json={"username": "newuser", "password": "pass1234", "role": "user"}
         )
     assert response.status_code == 201
 
@@ -80,7 +80,7 @@ async def test_delete_user_removes_from_passwd(client: AsyncClient, admin_token:
         create = await client.post(
             "/api/users",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"username": "todelete", "password": "pass123", "role": "user"}
+            json={"username": "todelete", "password": "pass1234", "role": "user"}
         )
         user_id = create.json()["id"]
 

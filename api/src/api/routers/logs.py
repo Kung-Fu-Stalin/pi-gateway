@@ -1,17 +1,17 @@
 import asyncio
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
-from api.auth import require_admin, get_current_user
-from api.database import get_db
+from api.auth import require_admin, decode_token
+from api.config import settings
 from api.models import UIUser
 
 router = APIRouter(tags=["logs"])
 
-SQUID_LOG = "/var/log/squid/access.log"
+logger = logging.getLogger(__name__)
 
 
 def parse_log_line(line: str) -> dict | None:
@@ -20,7 +20,7 @@ def parse_log_line(line: str) -> dict | None:
         return None
     try:
         return {
-            "timestamp": datetime.fromtimestamp(float(parts[0])).isoformat(),
+            "timestamp": datetime.fromtimestamp(float(parts[0]), tz=timezone.utc).isoformat(),
             "duration": int(parts[1]),
             "client": parts[2],
             "result": parts[3],
@@ -38,34 +38,46 @@ def parse_log_line(line: str) -> dict | None:
 @router.get("/api/logs")
 async def get_logs(
     limit: int = Query(50, le=500),
-    page: int = Query(1),
+    page: int = Query(1, ge=1),
     user: UIUser = Depends(require_admin),
 ):
-    log_path = Path(SQUID_LOG)
+    log_path = Path(settings.squid_log)
     if not log_path.exists():
-        return {"total": 0, "items": []}
+        return {"total": 0, "items": [], "page": page, "limit": limit}
 
-    lines = log_path.read_text().splitlines()
+    # Читаем построчно чтобы не грузить всё в память
+    lines = []
+    with open(log_path, "r") as f:
+        for line in f:
+            entry = parse_log_line(line)
+            if entry:
+                lines.append(entry)
+
     lines.reverse()
-
-    parsed = []
-    for line in lines:
-        entry = parse_log_line(line)
-        if entry:
-            parsed.append(entry)
-
     offset = (page - 1) * limit
 
     return {
-        "total": len(parsed),
-        "items": parsed[offset: offset + limit],
+        "total": len(lines),
+        "items": lines[offset: offset + limit],
+        "page": page,
+        "limit": limit,
     }
 
 
 @router.websocket("/ws/logs")
-async def ws_logs(websocket: WebSocket):
+async def ws_logs(websocket: WebSocket, token: str = ""):
+    # Аутентификация через query param
+    try:
+        payload = decode_token(token)
+        if payload.get("role") != "admin":
+            await websocket.close(code=4003)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
     await websocket.accept()
-    log_path = Path(SQUID_LOG)
+    log_path = Path(settings.squid_log)
 
     if not log_path.exists():
         await websocket.close(code=1008)
@@ -84,3 +96,5 @@ async def ws_logs(websocket: WebSocket):
                     await asyncio.sleep(0.5)
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        logger.error("WebSocket logs error: %s", e)
