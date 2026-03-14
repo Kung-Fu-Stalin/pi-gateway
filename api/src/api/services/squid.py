@@ -1,6 +1,5 @@
-import logging
 import os
-import tempfile
+import logging
 
 import docker
 
@@ -11,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 def reload_squid() -> None:
     try:
-        client = docker.from_env()
+        docker_host = os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock")
+        client = docker.DockerClient(base_url=docker_host)
         container = client.containers.get(settings.squid_container)
         if container.status == "running":
             result = container.exec_run("squid -k reconfigure")

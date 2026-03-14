@@ -1,11 +1,25 @@
 name: pi-gateway
 
 services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: socket-proxy
+    restart: always
+    environment:
+      - CONTAINERS=1
+      - POST=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - internal
+
   caddy:
     container_name: caddy
     depends_on:
-      - api
-      - ui
+      api:
+        condition: service_healthy
+      ui:
+        condition: service_started
     build: ./caddy
     restart: always
     ports:
@@ -20,6 +34,12 @@ services:
       - caddy_config:/config
     networks:
       - internal
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:2019/config/ || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   squid:
     container_name: squid
@@ -33,35 +53,52 @@ services:
     entrypoint: >
       sh -c "rm -f /run/squid.pid &&
              chown -R proxy:proxy /var/log/squid &&
-             touch /shared/domains.txt /shared/passwd &&
+             chmod -R 750 /var/log/squid &&
+             mkdir -p /shared &&
+             touch /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
+             chmod 666 /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
              ln -sf /shared/domains.txt /etc/squid/domains.txt &&
              ln -sf /shared/passwd /etc/squid/passwd &&
              squid -N"
     networks:
       - internal
+    healthcheck:
+      test: [ "CMD-SHELL", "squid -k check || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   api:
     container_name: api
     depends_on:
-      - squid
+      squid:
+        condition: service_healthy
+      socket-proxy:
+        condition: service_started
     build: ./api
     restart: always
-    user: root
     environment:
       - API_SECRET_KEY=${API_SECRET_KEY}
       - DOMAIN=${DOMAIN}
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - SQUID_CONTAINER=pi-gateway-squid-1
+      - SQUID_CONTAINER=squid
+      - DOCKER_HOST=tcp://socket-proxy:2375
       - DOMAINS_FILE=/shared/domains.txt
       - HTPASSWD_FILE=/shared/passwd
       - DB_URL=sqlite+aiosqlite:////shared/db.sqlite3
     volumes:
       - shared_data:/shared
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - squid_logs:/var/log/squid:ro
     networks:
       - internal
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   ui:
     container_name: ui
@@ -69,6 +106,12 @@ services:
     restart: always
     networks:
       - internal
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:80 || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 networks:
   internal:
