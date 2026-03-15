@@ -47,17 +47,25 @@ export default function LogsPage() {
     const token = useAuthStore.getState().accessToken
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 
-    const ws = new WebSocket(
-      `${protocol}//${window.location.host}/ws/logs?token=${token}`
-    )
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/logs`)
 
     wsRef.current = ws
 
     ws.onopen = () => {
-      console.log('Logs websocket connected')
+      ws.send(JSON.stringify({ type: 'auth', token }))
     }
 
     ws.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.type === 'auth_error') {
+          ws.close()
+          setLive(false)
+          return
+        }
+      } catch {
+        console.warn('Received non-JSON log line:', e.data)
+      }
       setLiveLines(prev => [...prev, e.data].slice(-200))
     }
 

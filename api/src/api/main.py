@@ -7,7 +7,10 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy import select
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from api.limiter import limiter
 from api.config import settings
 from api.services.pac import render_pac
 from api.database import async_session, get_db
@@ -16,7 +19,6 @@ from api.routers import auth, domains, users, logs
 from api.services.squid import write_domains
 
 logger = logging.getLogger(__name__)
-
 
 async def create_admin_if_not_exists() -> None:
     async with async_session() as db:
@@ -76,13 +78,18 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url=None,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+origins = [f"https://{settings.domain}"]
+if settings.debug:
+    origins.append("http://localhost:5173")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[f"https://{settings.domain}", f"http://{settings.domain}", "http://localhost:5173"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(auth.router)

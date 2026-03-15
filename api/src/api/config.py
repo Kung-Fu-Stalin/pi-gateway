@@ -12,7 +12,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-
+    debug: bool = False
     domain: str = "localhost"
     api_secret_key: str = ""
     admin_username: str = "admin"
