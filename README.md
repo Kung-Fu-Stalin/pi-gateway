@@ -299,9 +299,9 @@ alembic upgrade head
 - **Hot Reload**: Both UI (`npm run dev`) and API (`--reload` flag) support hot reloading
 - **Debug Logging**: Set `DEBUG=1` environment variable for verbose logging
 - **Database**: Local development uses SQLite at `api/dev.db` for easy inspection/reset
-- **API Documentation**: FastAPI auto-generates docs at `http://localhost:8000/docs`
 
 For detailed UI development instructions, see [ui/README.md](ui/README.md).
+For detailed API development instructions, see [api/README.md](api/README.md).
 
 ## Deployment
 
