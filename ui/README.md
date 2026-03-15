@@ -4,6 +4,20 @@ React + TypeScript + Vite frontend for the Pi-Gateway proxy management system.
 
 Modern, responsive admin dashboard built with **React 19**, **TypeScript**, and **Vite** for fast development and production builds.
 
+## Table of Contents
+
+- [Features](#features)
+- [Local Development Setup](#local-development-setup)
+- [Available Scripts](#available-scripts)
+- [Project Structure](#project-structure)
+- [Configuration](#configuration)
+- [Building for Production](#building-for-production)
+- [Development Workflow](#development-workflow)
+- [Troubleshooting](#troubleshooting)
+- [Performance Tips](#performance-tips)
+- [Dependencies](#dependencies)
+- [Resources](#resources)
+
 ## Features
 
 - ⚡ **Fast Development** with Vite and Hot Module Replacement (HMR)
