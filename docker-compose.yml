@@ -1,6 +1,7 @@
 name: pi-gateway
 
 services:
+  # Init container
   init:
     image: busybox
     container_name: init
@@ -9,11 +10,13 @@ services:
       - shared_data:/shared
     command: >
       sh -c "mkdir -p /shared &&
-             touch /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
+             echo '.invalid' > /shared/domains.txt &&
+             touch /shared/passwd /shared/db.sqlite3 &&
              chown -R 1000:1000 /shared &&
              chmod -R 770 /shared"
     restart: "no"
 
+  # Docker socket proxy
   socket-proxy:
     image: tecnativa/docker-socket-proxy
     container_name: socket-proxy
@@ -26,23 +29,27 @@ services:
     networks:
       - internal
 
+  # Squid proxy
   squid:
     container_name: squid
     build: ./squid
     depends_on:
       - init
     restart: always
-    user: "1000:1000"
     ports:
       - "3128:3128"
     volumes:
       - shared_data:/shared
       - squid_logs:/var/log/squid
     entrypoint: >
-      sh -c "mkdir -p /var/log/squid &&
-             ln -sf /shared/domains.txt /etc/squid/domains.txt &&
-             ln -sf /shared/passwd /etc/squid/passwd &&
-             squid -N"
+      sh -c "
+        mkdir -p /var/log/squid &&
+        chown -R proxy:proxy /var/log/squid &&
+        [ -s /shared/domains.txt ] || echo '.invalid' > /shared/domains.txt &&
+        ln -sf /shared/domains.txt /etc/squid/domains.txt &&
+        ln -sf /shared/passwd /etc/squid/passwd &&
+        squid -N
+      "
     networks:
       - internal
     healthcheck:
@@ -52,6 +59,7 @@ services:
       retries: 3
       start_period: 15s
 
+  # API сервис
   api:
     container_name: api
     build: ./api
@@ -82,6 +90,7 @@ services:
       retries: 3
       start_period: 20s
 
+  # UI сервис
   ui:
     container_name: ui
     build: ./ui
@@ -95,6 +104,7 @@ services:
       retries: 3
       start_period: 10s
 
+  # Caddy для HTTPS
   caddy:
     container_name: caddy
     build: ./caddy
