@@ -122,6 +122,7 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - ./caddy/Caddyfile.active:/etc/caddy/Caddyfile
     networks:
       - internal
     healthcheck:

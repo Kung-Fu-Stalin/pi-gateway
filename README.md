@@ -98,6 +98,113 @@ Once services are running:
 - **Squid Proxy**: http://your-server.com:3128 (configure clients to use this proxy)
 - **API**: https://your-domain.com/api (REST API endpoints)
 
+## Local Development
+
+### Quick Setup for Development
+
+For local development without Docker, you can run components individually for faster iteration:
+
+#### Prerequisites for Local Development
+
+- **Node.js** 18+ (for UI development)
+- **Python** 3.12+ (for API development)
+- **uv** package manager (recommended for Python)
+- **SQLite3**
+- Docker & Docker Compose (optional, but recommended for proxy testing)
+
+#### Option 1: Running Everything Locally (Recommended for Development)
+
+**Terminal 1: Start the Backend API**
+
+```bash
+cd api
+pip install -e .
+export API_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=admin-password
+export DB_URL="sqlite+aiosqlite:///./dev.db"
+export SQUID_CONTAINER=localhost
+python -m uvicorn src.api.main:app --reload --port 8000
+```
+
+**Terminal 2: Start the Frontend UI**
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+Access the application at **http://localhost:5173**
+
+The UI automatically proxies API requests to `http://localhost:8000` (configured in `vite.config.ts`).
+
+#### Option 2: Docker Compose for Full Stack
+
+For testing with actual Squid proxy and all services:
+
+```bash
+python setup.py    # Follow prompts to configure environment
+docker-compose up -d
+```
+
+### Environment Configurations
+
+The project supports two different configurations:
+
+| Environment | Configuration File | Use Case |
+|-------------|-------------------|----------|
+| **Local Development** | `Caddyfile.local` | HTTP on port :80, local SSL certificates, no domain needed |
+| **Production (Raspberry Pi)** | `Caddyfile` | HTTPS with Let's Encrypt, custom domain, real SSL certificates |
+
+The `setup.py` script will automatically select the appropriate Caddyfile based on your environment choice.
+
+### Running Migrations Locally
+
+If running the API locally and need to update the database schema:
+
+```bash
+cd api
+alembic upgrade head
+```
+
+### Development Tips
+
+- **Hot Reload**: Both UI (`npm run dev`) and API (`--reload` flag) support hot reloading
+- **Debug Logging**: Set `DEBUG=1` environment variable for verbose logging
+- **Database**: Local development uses SQLite at `api/dev.db` for easy inspection/reset
+- **API Documentation**: FastAPI auto-generates docs at `http://localhost:8000/docs`
+
+For detailed UI development instructions, see [ui/README.md](ui/README.md).
+
+## Deployment
+
+### Raspberry Pi Deployment
+
+1. Configure production environment:
+```bash
+python setup.py
+# Select "production" environment
+# Enter your domain (e.g., pi-gateway.example.com)
+# Enter admin credentials
+```
+
+2. Start services:
+```bash
+docker-compose up -d
+```
+
+The system will:
+- Use `Caddyfile` (production configuration)
+- Request SSL certificates from Let's Encrypt automatically
+- Run on your custom domain with HTTPS
+
+### Scaling Considerations
+
+- **Database**: Currently uses SQLite. For high-traffic scenarios, consider migrating to PostgreSQL
+- **Squid Cache**: Configure cache size in `squid/squid.conf` based on available disk space
+- **Caddy**: Can handle thousands of concurrent connections on Raspberry Pi 4+
+
 ### 6. Login
 
 Use the credentials specified in your `.env` file:
