@@ -59,7 +59,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # API сервис
+  # API service
   api:
     container_name: api
     build: ./api
@@ -93,7 +93,7 @@ services:
       retries: 3
       start_period: 20s
 
-  # UI сервис
+  # UI service
   ui:
     container_name: ui
     build: ./ui
@@ -107,7 +107,7 @@ services:
       retries: 3
       start_period: 10s
 
-  # Caddy для HTTPS
+  # Caddy for HTTPS
   caddy:
     container_name: caddy
     build: ./caddy
