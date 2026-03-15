@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+import tempfile
 
 import docker
 
@@ -10,8 +11,7 @@ logger = logging.getLogger(__name__)
 
 def reload_squid() -> None:
     try:
-        docker_host = os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock")
-        client = docker.DockerClient(base_url=docker_host)
+        client = docker.from_env()
         container = client.containers.get(settings.squid_container)
         if container.status == "running":
             result = container.exec_run("squid -k reconfigure")
@@ -25,11 +25,13 @@ def reload_squid() -> None:
 
 def write_domains(domains: list[str]) -> None:
     lines = [f".{d}" if not d.startswith(".") else d for d in domains]
-    content = "\n".join(lines) + "\n" if lines else ""
+    if not lines:
+        lines = [".localhost"]
 
-    # Атомарная запись через временный файл
+    content = "\n".join(lines) + "\n"
     target = settings.domains_file
-    dir_name = os.path.dirname(target)
+    dir_name = os.path.dirname(target) or "."
+    tmp_path = None
 
     try:
         with tempfile.NamedTemporaryFile(
@@ -45,6 +47,6 @@ def write_domains(domains: list[str]) -> None:
         logger.debug("Wrote %d domains to %s", len(domains), target)
     except Exception as e:
         logger.error("Failed to write domains file: %s", e)
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise

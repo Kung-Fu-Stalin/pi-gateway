@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/auth'
 import { useAuth } from './hooks/useAuth'
+import ToastContainer from './components/Toast'
 import LoginPage from './pages/LoginPage'
 import LogsPage from './pages/LogsPage'
 import UsersPage from './pages/UsersPage'
@@ -24,19 +25,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={
-        <ProtectedRoute>
-          <Layout />
-        </ProtectedRoute>
-      }>
-        <Route index element={<Navigate to="/domains" replace />} />
-        <Route path="domains" element={<DomainsPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="logs" element={<LogsPage />} />
-      </Route>
-    </Routes>
+    <>
+      <ToastContainer />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
+          <Route index element={<Navigate to="/domains" replace />} />
+          <Route path="domains" element={<DomainsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="logs" element={<LogsPage />} />
+        </Route>
+      </Routes>
+    </>
   )
 }

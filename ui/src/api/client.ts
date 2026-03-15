@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/auth'
+import { useToast } from '../components/Toast'
 
 const api = axios.create({
   baseURL: '/api',
@@ -14,15 +15,12 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-let isRefreshing = false
-
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config
-    if (error.response?.status === 401 && !original._retry && !isRefreshing) {
+    if (error.response?.status === 401 && !original._retry) {
       original._retry = true
-      isRefreshing = true
       try {
         const res = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
         const newToken = res.data.access_token
@@ -32,10 +30,24 @@ api.interceptors.response.use(
       } catch {
         useAuthStore.getState().logout()
         window.location.href = '/login'
-      } finally {
-        isRefreshing = false
       }
     }
+
+    if (error.response?.status !== 401) {
+      const detail = error.response?.data?.detail
+      let message: string
+
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (Array.isArray(detail)) {
+        message = detail.map((e: { msg: string }) => e.msg).join(', ')
+      } else {
+        message = error.message || 'Something went wrong'
+      }
+
+      useToast.getState().add(message)
+    }
+
     return Promise.reject(error)
   }
 )
