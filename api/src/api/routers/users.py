@@ -61,7 +61,6 @@ async def _rebuild_htpasswd_from_db(db: AsyncSession) -> None:
     reload_squid()
 
 
-# ВАЖНО: /me/pac должен быть ДО /{user_id}
 @router.get("/me/pac")
 async def get_my_pac(
     user: UIUser = Depends(get_current_user),
@@ -186,10 +185,8 @@ async def reset_password(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Обновляем UI пароль
     user.password_hash = hash_password(body.password)
 
-    # Обновляем proxy credentials
     new_proxy_pass = secrets.token_hex(16)
     new_pac_token = secrets.token_hex(32)
 

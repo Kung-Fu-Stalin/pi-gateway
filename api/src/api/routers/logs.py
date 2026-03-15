@@ -46,7 +46,6 @@ async def get_logs(
     if not log_path.exists():
         return {"total": 0, "items": [], "page": page, "limit": limit}
 
-    # Читаем построчно чтобы не грузить всё в память
     lines = []
     with open(log_path, "r") as f:
         for line in f:

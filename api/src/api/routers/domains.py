@@ -61,7 +61,6 @@ async def sync_squid(db: AsyncSession) -> None:
     reload_squid()
 
 
-# ВАЖНО: /pending и /domains/* должны быть ДО /{group_id}
 @router.get("/pending")
 async def list_pending(
     db: AsyncSession = Depends(get_db),
@@ -121,7 +120,6 @@ async def reject_domain(
     domain.reject_reason = body.reason
     await db.commit()
 
-    # Если был approved — нужно убрать из domains.txt
     if was_approved:
         await sync_squid(db)
 
@@ -227,7 +225,6 @@ async def delete_domain(
     if not domain or domain.group_id != group_id:
         raise HTTPException(status_code=404, detail="Domain not found")
 
-    # Обычный пользователь может удалять только свои домены
     if user.role != "admin" and domain.created_by != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 

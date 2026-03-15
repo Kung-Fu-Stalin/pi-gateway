@@ -93,7 +93,6 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     if not db_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    # Корректное сравнение timezone-aware datetime
     expires_at = db_token.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
