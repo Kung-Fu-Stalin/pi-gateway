@@ -2,6 +2,18 @@
 
 A comprehensive proxy gateway system designed to manage and secure internet access through a centralized hub. Pi-Gateway combines multiple services to provide domain filtering, user authentication, rate limiting, and comprehensive logging.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+  - [Option 1: Automated Setup](#option-1-automated-setup-recommended)
+  - [Option 2: Manual Configuration](#option-2-manual-configuration)
+- [Local Development](#local-development)
+- [Deployment](#deployment)
+
 ## Overview
 
 Pi-Gateway is a containerized application that implements a full-featured proxy infrastructure with the following components:
@@ -48,16 +60,94 @@ Pi-Gateway is a containerized application that implements a full-featured proxy 
 
 ## Quick Start
 
-### 1. Clone the Repository
+### Option 1: Automated Setup (Recommended)
+
+The easiest way to get started is using the interactive `setup.py` script:
 
 ```bash
-git clone https://github.com/Kung-Fu-Stalin/pi-gateway.git
-cd pi-gateway
+python setup.py
 ```
 
-### 2. Configure Environment Variables
+This script will:
+- ✅ Check your system for required dependencies (Docker, Docker Compose)
+- ✅ Guide you through environment selection (Local Development or Production)
+- ✅ Ask for configuration details (domain, admin credentials)
+- ✅ Automatically generate a `.env` file with all settings
+- ✅ Set up the correct Caddyfile based on your environment
+- ✅ Create necessary directories and files
 
-Create a `.env` file in the root directory with the required configuration:
+**What the setup.py script does:**
+
+1. **Dependency Check**: Verifies Docker and Docker Compose are installed
+2. **Environment Selection**: Choose between:
+   - **Local Development**: HTTP on localhost with local certificates (no domain needed)
+   - **Production (Raspberry Pi)**: HTTPS with Let's Encrypt on your domain
+3. **Configuration**: Interactively prompts for:
+   - Domain name (or uses "localhost" for local development)
+   - Admin username and password
+   - ACME email (only for production)
+4. **Automatic Setup**:
+   - Generates secure API secret key
+   - Creates `.env` file with all configuration
+   - Copies appropriate Caddyfile (local or production)
+   - Creates necessary data directories
+
+**Example Interactive Session:**
+
+```
+==================================================
+  Pi Gateway — Setup
+==================================================
+
+Checking dependencies...
+  ✓ docker found
+  ✓ docker compose found
+
+Select deployment environment:
+
+  1. Local Development
+  2. Production (Raspberry Pi)
+
+Environment [1-2]: 1
+
+Please provide the following configuration:
+
+  Domain: localhost (local development)
+  ACME Email: local@example.com (not needed for local)
+Admin username [admin]: admin
+Admin password (min 8 chars): ••••••••
+
+Generating configuration...
+  ✓ .env created
+  ✓ Using Caddyfile.local (local HTTP setup)
+  ✓ squid/domains.txt created
+
+==================================================
+  Setup complete!
+==================================================
+
+Next steps:
+
+  1. Build and start:
+       docker compose up --build -d
+
+  2. Open http://localhost
+
+  3. Login with: admin / <your password>
+
+  To stop:    docker compose down
+  To update:  git pull && docker compose up --build -d
+```
+
+After running `setup.py`, simply start the services:
+
+```bash
+docker-compose up -d
+```
+
+### Option 2: Manual Configuration
+
+If you prefer manual setup, create a `.env` file in the root directory with the required configuration:
 
 ```env
 # Caddy Configuration
@@ -69,6 +159,27 @@ API_SECRET_KEY=your-secret-key-here-change-this
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin-password-here
 ```
+
+Then copy the appropriate Caddyfile:
+
+```bash
+# For local development
+cp caddy/Caddyfile.local caddy/Caddyfile.active
+
+# For production
+cp caddy/Caddyfile caddy/Caddyfile.active
+```
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Kung-Fu-Stalin/pi-gateway.git
+cd pi-gateway
+```
+
+### 2. Run Setup or Configure Manually
+
+See "Automated Setup" or "Manual Configuration" above.
 
 ### 3. Initialize the Database (First Run Only)
 
@@ -141,12 +252,27 @@ The UI automatically proxies API requests to `http://localhost:8000` (configured
 
 #### Option 2: Docker Compose for Full Stack
 
-For testing with actual Squid proxy and all services:
+For testing with actual Squid proxy and all services, use the automated setup:
 
 ```bash
-python setup.py    # Follow prompts to configure environment
+python setup.py
+```
+
+When prompted, choose **"Local Development"** environment. This will:
+- Set up HTTP on localhost automatically
+- Use local certificates (no ACME needed)
+- Create all necessary configuration files
+
+Then start the services:
+
+```bash
 docker-compose up -d
 ```
+
+All services will be available at:
+- **Frontend**: http://localhost
+- **API**: http://localhost:8000
+- **Squid Proxy**: http://localhost:3128
 
 ### Environment Configurations
 
