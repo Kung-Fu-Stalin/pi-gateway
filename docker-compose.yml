@@ -1,6 +1,22 @@
 name: pi-gateway
 
 services:
+  # Init container
+  init:
+    image: busybox
+    container_name: init
+    user: root
+    volumes:
+      - shared_data:/shared
+    command: >
+      sh -c "mkdir -p /shared &&
+             echo '.invalid' > /shared/domains.txt &&
+             touch /shared/passwd /shared/db.sqlite3 &&
+             chown -R 1000:1000 /shared &&
+             chmod -R 770 /shared"
+    restart: "no"
+
+  # Docker socket proxy
   socket-proxy:
     image: tecnativa/docker-socket-proxy
     container_name: socket-proxy
@@ -13,37 +29,12 @@ services:
     networks:
       - internal
 
-  caddy:
-    container_name: caddy
-    depends_on:
-      api:
-        condition: service_healthy
-      ui:
-        condition: service_started
-    build: ./caddy
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      - ACME_EMAIL=${ACME_EMAIL}
-      - DOMAIN=${DOMAIN}
-    volumes:
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - internal
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:2019/config/ || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
+  # Squid proxy
   squid:
     container_name: squid
     build: ./squid
+    depends_on:
+      - init
     restart: always
     ports:
       - "3128:3128"
@@ -51,32 +42,31 @@ services:
       - shared_data:/shared
       - squid_logs:/var/log/squid
     entrypoint: >
-      sh -c "rm -f /run/squid.pid &&
-             chown -R proxy:proxy /var/log/squid &&
-             chmod -R 750 /var/log/squid &&
-             mkdir -p /shared &&
-             touch /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
-             chmod 666 /shared/domains.txt /shared/passwd /shared/db.sqlite3 &&
-             ln -sf /shared/domains.txt /etc/squid/domains.txt &&
-             ln -sf /shared/passwd /etc/squid/passwd &&
-             squid -N"
+      sh -c "
+        mkdir -p /var/log/squid &&
+        chown -R proxy:proxy /var/log/squid &&
+        [ -s /shared/domains.txt ] || echo '.invalid' > /shared/domains.txt &&
+        ln -sf /shared/domains.txt /etc/squid/domains.txt &&
+        ln -sf /shared/passwd /etc/squid/passwd &&
+        squid -N
+      "
     networks:
       - internal
     healthcheck:
-      test: [ "CMD-SHELL", "squid -k check || exit 1" ]
+      test: ["CMD-SHELL", "squid -k check || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
 
+  # API сервис
   api:
     container_name: api
-    depends_on:
-      squid:
-        condition: service_healthy
-      socket-proxy:
-        condition: service_started
     build: ./api
+    depends_on:
+      - squid
+      - socket-proxy
+      - init
     restart: always
     environment:
       - API_SECRET_KEY=${API_SECRET_KEY}
@@ -100,6 +90,7 @@ services:
       retries: 3
       start_period: 20s
 
+  # UI сервис
   ui:
     container_name: ui
     build: ./ui
@@ -107,7 +98,34 @@ services:
     networks:
       - internal
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:80 || exit 1" ]
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Caddy для HTTPS
+  caddy:
+    container_name: caddy
+    build: ./caddy
+    depends_on:
+      - api
+      - ui
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/healthz || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -118,7 +136,7 @@ networks:
     driver: bridge
 
 volumes:
+  shared_data:
+  squid_logs:
   caddy_data:
   caddy_config:
-  squid_logs:
-  shared_data:

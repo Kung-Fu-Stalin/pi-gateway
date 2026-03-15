@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/auth'
+import { useToast } from '../components/Toast'
 
 const api = axios.create({
   baseURL: '/api',
@@ -31,6 +32,22 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
+
+    if (error.response?.status !== 401) {
+      const detail = error.response?.data?.detail
+      let message: string
+
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (Array.isArray(detail)) {
+        message = detail.map((e: { msg: string }) => e.msg).join(', ')
+      } else {
+        message = error.message || 'Something went wrong'
+      }
+
+      useToast.getState().add(message)
+    }
+
     return Promise.reject(error)
   }
 )
