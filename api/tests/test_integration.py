@@ -1,14 +1,12 @@
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from httpx import AsyncClient
 
 from api.config import settings
 
 
 async def test_approve_domain_writes_file(client: AsyncClient, admin_token: str, tmp_files: dict):
-    # Создаём группу и домен
     group = await client.post(
         "/api/groups",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -31,7 +29,6 @@ async def test_approve_domain_writes_file(client: AsyncClient, admin_token: str,
         )
     assert response.status_code == 200
 
-    # Проверяем что домен записан в файл
     content = Path(tmp_files["domains"]).read_text()
     assert "test.com" in content
 
@@ -94,7 +91,6 @@ async def test_delete_user_removes_from_passwd(client: AsyncClient, admin_token:
 
 
 async def test_pac_file_contains_approved_domains(client: AsyncClient, admin_token: str, tmp_files: dict):
-    # Создаём и апрувим домен
     group = await client.post(
         "/api/groups",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -115,14 +111,12 @@ async def test_pac_file_contains_approved_domains(client: AsyncClient, admin_tok
             headers={"Authorization": f"Bearer {admin_token}"}
         )
 
-    # Получаем PAC токен
     pac_info = await client.get(
         "/api/users/me/pac",
         headers={"Authorization": f"Bearer {admin_token}"}
     )
     token = pac_info.json()["pac_url"].split("token=")[1]
 
-    # Проверяем PAC файл
     pac_response = await client.get(f"/proxy.pac?token={token}")
     assert pac_response.status_code == 200
     assert "mysite.com" in pac_response.text

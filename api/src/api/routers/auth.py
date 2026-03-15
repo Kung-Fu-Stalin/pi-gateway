@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
+from api.limiter import limiter
 from api.auth import (
     hash_password, verify_password, create_access_token,
     create_refresh_token, hash_token, get_current_user
@@ -40,14 +41,19 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(
+    request: Request,
+    body: LoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(UIUser).where(UIUser.username == body.username))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    # Удаляем старые refresh токены этого пользователя
     await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
 
     access_token = create_access_token(user.id, user.role)
@@ -87,7 +93,6 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     if not db_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    # Корректное сравнение timezone-aware datetime
     expires_at = db_token.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)

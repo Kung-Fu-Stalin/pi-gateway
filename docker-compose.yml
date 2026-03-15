@@ -1,5 +1,4 @@
 name: pi-gateway
-
 services:
   # Init container
   init:
@@ -10,10 +9,12 @@ services:
       - shared_data:/shared
     command: >
       sh -c "mkdir -p /shared &&
-             echo '.invalid' > /shared/domains.txt &&
-             touch /shared/passwd /shared/db.sqlite3 &&
-             chown -R 1000:1000 /shared &&
-             chmod -R 770 /shared"
+           [ -f /shared/domains.txt ] || echo '.invalid' > /shared/domains.txt &&
+           [ -f /shared/passwd ] || touch /shared/passwd &&
+           [ -f /shared/db.sqlite3 ] || touch /shared/db.sqlite3 &&
+           chmod 777 /shared &&
+           chmod 644 /shared/domains.txt /shared/passwd &&
+           chmod 666 /shared/db.sqlite3"
     restart: "no"
 
   # Docker socket proxy
@@ -34,7 +35,8 @@ services:
     container_name: squid
     build: ./squid
     depends_on:
-      - init
+      init:
+        condition: service_completed_successfully
     restart: always
     ports:
       - "3128:3128"
@@ -42,14 +44,12 @@ services:
       - shared_data:/shared
       - squid_logs:/var/log/squid
     entrypoint: >
-      sh -c "
-        mkdir -p /var/log/squid &&
-        chown -R proxy:proxy /var/log/squid &&
-        [ -s /shared/domains.txt ] || echo '.invalid' > /shared/domains.txt &&
-        ln -sf /shared/domains.txt /etc/squid/domains.txt &&
-        ln -sf /shared/passwd /etc/squid/passwd &&
-        squid -N
-      "
+        sh -c "
+          mkdir -p /var/log/squid &&
+          chown -R proxy:proxy /var/log/squid &&
+          chmod 644 /shared/domains.txt /shared/passwd &&
+          squid -N
+        "
     networks:
       - internal
     healthcheck:
@@ -64,9 +64,12 @@ services:
     container_name: api
     build: ./api
     depends_on:
-      - squid
-      - socket-proxy
-      - init
+      init:
+        condition: service_completed_successfully
+      squid:
+        condition: service_started
+      socket-proxy:
+        condition: service_started
     restart: always
     environment:
       - API_SECRET_KEY=${API_SECRET_KEY}
@@ -109,8 +112,10 @@ services:
     container_name: caddy
     build: ./caddy
     depends_on:
-      - api
-      - ui
+      api:
+        condition: service_started
+      ui:
+        condition: service_started
     restart: always
     ports:
       - "80:80"

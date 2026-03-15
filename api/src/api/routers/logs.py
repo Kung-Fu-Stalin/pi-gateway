@@ -1,3 +1,4 @@
+import json
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -45,7 +46,6 @@ async def get_logs(
     if not log_path.exists():
         return {"total": 0, "items": [], "page": page, "limit": limit}
 
-    # Читаем построчно чтобы не грузить всё в память
     lines = []
     with open(log_path, "r") as f:
         for line in f:
@@ -65,10 +65,24 @@ async def get_logs(
 
 
 @router.websocket("/ws/logs")
-async def ws_logs(websocket: WebSocket, token: str = ""):
-    # Аутентификация через query param
+async def ws_logs(websocket: WebSocket):
+    await websocket.accept()
     try:
-        payload = decode_token(token)
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        msg = json.loads(raw)
+    except asyncio.TimeoutError:
+        await websocket.close(code=4001)
+        return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
+    if msg.get("type") != "auth" or not msg.get("token"):
+        await websocket.close(code=4001)
+        return
+
+    try:
+        payload = decode_token(msg["token"])
         if payload.get("role") != "admin":
             await websocket.close(code=4003)
             return
@@ -76,9 +90,7 @@ async def ws_logs(websocket: WebSocket, token: str = ""):
         await websocket.close(code=4001)
         return
 
-    await websocket.accept()
     log_path = Path(settings.squid_log)
-
     if not log_path.exists():
         await websocket.close(code=1008)
         return

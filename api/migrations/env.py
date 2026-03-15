@@ -46,7 +46,7 @@ def do_run_migrations(connection: Connection) -> None:
         include_object=include_object,
         compare_type=False,
         compare_server_default=False,
-        render_as_batch=True,  # включает batch mode для SQLite
+        render_as_batch=True,
     )
     with context.begin_transaction():
         context.run_migrations()
